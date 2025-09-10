@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Online Modell Erosion im Hochgebirge (Safari-optimiert)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif}
+    input[type="range"]{
+      -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:#e2e8f0;outline:none
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:#0f766e;cursor:pointer;
+      box-shadow:0 2px 4px rgba(0,0,0,.2);border:none;margin-top:-7px /* Safari-Fix: Thumb vertikal zentrieren */
+    }
+    input[type="range"]::-moz-range-thumb{
+      width:20px;height:20px;border-radius:50%;background:#0f766e;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,.2);border:none
+    }
+  </style>
+</head>
+<body class="min-h-screen w-full bg-gradient-to-b from-slate-50 to-white text-slate-800">
+  <div class="mx-auto max-w-4xl px-6 py-10">
+    <h1 class="mb-6 text-2xl font-semibold flex items-center gap-3">
+      <svg class="h-8 w-8 text-slate-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>
+      </svg>
+      Erosions‑Risiko im Hochgebirge
+    </h1>
+
+    <!-- Index-Anzeige -->
+    <div id="score-display" class="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div class="mb-3">
+        <div class="text-sm uppercase tracking-wide text-slate-500">Erosionsindex</div>
+        <div id="score-value" class="text-4xl font-bold leading-none">50</div>
+      </div>
+      <div class="h-4 w-full overflow-hidden rounded-full bg-slate-100">
+        <div id="score-bar" class="h-full bg-gradient-to-r from-emerald-400 to-green-600" style="width:50%"></div>
+      </div>
+    </div>
+
+    <!-- Regler -->
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="font-medium text-slate-700">Besucher pro Tag</h3>
+          <div id="visitors-value" class="text-sm text-slate-500">200</div>
+        </div>
+        <input type="range" id="visitors-slider" min="0" max="1000" step="10" value="200" class="w-full">
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="font-medium text-slate-700">Hangneigung</h3>
+          <div id="slope-value" class="text-sm text-slate-500">20°</div>
+        </div>
+        <input type="range" id="slope-slider" min="0" max="60" step="1" value="20" class="w-full">
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="font-medium text-slate-700">Regentage / Monat</h3>
+          <div id="rain-value" class="text-sm text-slate-500">8</div>
+        </div>
+        <input type="range" id="rain-slider" min="0" max="30" step="1" value="8" class="w-full">
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="font-medium text-slate-700">Bodenbedeckung</h3>
+          <div id="vegetation-value" class="text-sm text-slate-500">60%</div>
+        </div>
+        <input type="range" id="vegetation-slider" min="0" max="100" step="1" value="60" class="w-full">
+      </div>
+    </div>
+
+    <!-- Maßnahmen -->
+    <div id="advice-container" class="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 class="mb-2 text-lg font-semibold">Empfohlene Maßnahmen</h2>
+      <ul id="advice-list" class="list-disc space-y-1 pl-5 text-slate-700">
+        <li>Hauptpfad klar markieren</li>
+        <li>Wegkanten mit Totholz oder Steinen begrenzen</li>
+        <li>Hinweise 'Stay on Trail' aufstellen</li>
+        <li>Monitoring mit Fotopoint einführen</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Hilfsfunktionen
+    function clamp(n, min=0, max=100){ return Math.min(max, Math.max(min, n)); }
+
+    // Zustand
+    let visitors = 200, slope = 20, rain = 8, vegetation = 60;
+
+    // DOM
+    const visitorsSlider = document.getElementById('visitors-slider');
+    const slopeSlider = document.getElementById('slope-slider');
+    const rainSlider = document.getElementById('rain-slider');
+    const vegetationSlider = document.getElementById('vegetation-slider');
+
+    const visitorsValue = document.getElementById('visitors-value');
+    const slopeValue = document.getElementById('slope-value');
+    const rainValue = document.getElementById('rain-value');
+    const vegetationValue = document.getElementById('vegetation-value');
+
+    const scoreValue = document.getElementById('score-value');
+    const scoreBar = document.getElementById('score-bar');
+    const adviceList = document.getElementById('advice-list');
+
+    function updateSimulation(){
+      const v = Math.min(1, Math.pow(visitors/500, 0.6));
+      const s = Math.min(1, Math.pow(slope/45, 0.8));
+      const r = Math.min(1, Math.pow(rain/20, 0.7));
+      const veg = Math.pow((100-vegetation)/100, 0.8);
+      const risk = 0.35*v + 0.25*s + 0.25*r + 0.15*veg;
+      const score = clamp(Math.round(risk*100));
+
+      // Score & Balken
+      scoreValue.textContent = score;
+      scoreBar.style.width = score + '%';
+      // Farbwechsel per classList (stabil in Safari)
+      scoreBar.classList.remove('from-emerald-400','to-green-600','from-amber-400','to-orange-600','from-red-400','to-rose-600');
+      if(score >= 70){ scoreBar.classList.add('from-red-400','to-rose-600'); }
+      else if(score >= 40){ scoreBar.classList.add('from-amber-400','to-orange-600'); }
+      else { scoreBar.classList.add('from-emerald-400','to-green-600'); }
+
+      // Empfehlungen
+      const adv = [];
+      if(score >= 70){
+        adv.push('Wegabschnitte bei Starkregen sperren','Stufen, Drainagen und Querrinnen anlegen','Holzbohlen oder Steintrittplatten einsetzen','Besucherzahlen über Parkraummanagement steuern');
+      } else if(score >= 40){
+        adv.push('Hauptpfad klar markieren','Wegkanten mit Totholz oder Steinen begrenzen','Hinweise \"Stay on Trail\" aufstellen','Monitoring mit Fotopoint einführen');
+      } else {
+        adv.push('Zustand gut – Monitoring fortsetzen');
+      }
+      adviceList.innerHTML = adv.map(x => '<li>'+x+'</li>').join('');
+    }
+
+    // Events
+    visitorsSlider.addEventListener('input', e => { visitors = +e.target.value; visitorsValue.textContent = visitors; updateSimulation(); });
+    slopeSlider.addEventListener('input', e => { slope = +e.target.value; slopeValue.textContent = slope+'°'; updateSimulation(); });
+    rainSlider.addEventListener('input', e => { rain = +e.target.value; rainValue.textContent = rain; updateSimulation(); });
+    vegetationSlider.addEventListener('input', e => { vegetation = +e.target.value; vegetationValue.textContent = vegetation+'%'; updateSimulation(); });
+
+    // Init (robust für Safari)
+    if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', updateSimulation); }
+    else { updateSimulation(); }
+  </script>
+</body>
+</html>
